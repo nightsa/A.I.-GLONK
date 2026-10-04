@@ -1,0 +1,6 @@
+{
+  "name": "CamDirector AI",
+  "description": "AI Camera Director that helps compose shots, recommends framing, zoom levels, angle, lighting, and camera settings on any device.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
