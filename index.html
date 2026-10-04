@@ -1,0 +1,1593 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0F172A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>CamDirector AI — กล้อง AI ช่วยจัดองค์ประกอบและมุมถ่ายภาพ</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%230F172A' stroke='%2310B981' stroke-width='4'/><circle cx='50' cy='50' r='26' fill='none' stroke='%2338BDF8' stroke-width='3'/><circle cx='50' cy='50' r='8' fill='%2310B981'/><path d='M30 25 L20 25 L20 35 M70 25 L80 25 L80 35 M30 75 L20 75 L20 65 M70 75 L80 75 L80 65' stroke='%23FBBF24' stroke-width='3' stroke-linecap='round' fill='none'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #080C16;
+      --surface: #0F172A;
+      --surface-card: #131D31;
+      --surface-border: #1E293B;
+      --primary: #10B981;
+      --primary-glow: rgba(16, 185, 129, 0.25);
+      --accent: #38BDF8;
+      --gold: #FBBF24;
+      --pink: #F472B6;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', 'Sarabun', sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* App Shell Container */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      height: 100dvh;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Viewfinder Viewport */
+    .viewfinder-container {
+      position: relative;
+      flex: 1;
+      background: #000;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #videoFeed, #imageFeed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    #imageFeed {
+      display: none;
+    }
+
+    /* HUD Overlay Canvas */
+    #hudCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* Floating Top Bar */
+    .top-bar {
+      position: absolute;
+      top: calc(10px + var(--safe-top));
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .top-bar * {
+      pointer-events: auto;
+    }
+
+    .glass-btn {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text);
+      height: 40px;
+      min-width: 40px;
+      padding: 0 12px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .glass-btn:active {
+      transform: scale(0.94);
+      background: rgba(30, 41, 59, 0.9);
+    }
+
+    .glass-btn.active {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    /* Quick Director Pill */
+    .director-pill {
+      position: absolute;
+      top: calc(58px + var(--safe-top));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--primary);
+      border-radius: 30px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .director-pill:hover {
+      background: rgba(30, 41, 59, 0.95);
+      box-shadow: 0 4px 24px var(--primary-glow);
+    }
+
+    /* Sample Scene Selector Overlay */
+    .sample-pill-bar {
+      position: absolute;
+      top: calc(98px + var(--safe-top));
+      left: 12px;
+      right: 12px;
+      z-index: 20;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 2px;
+    }
+
+    .sample-pill-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .sample-chip {
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .sample-chip.active {
+      background: rgba(37, 99, 235, 0.8);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    /* Bottom Control Cockpit */
+    .cockpit {
+      background: linear-gradient(180deg, rgba(8, 12, 22, 0.85) 0%, rgba(8, 12, 22, 0.98) 100%);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 10px 16px calc(12px + var(--safe-bottom));
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Zoom Switcher Pill */
+    .zoom-bar {
+      display: flex;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 3px;
+      gap: 3px;
+    }
+
+    .zoom-btn {
+      width: 38px;
+      height: 32px;
+      border-radius: 16px;
+      border: none;
+      background: transparent;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .zoom-btn.active {
+      background: var(--accent);
+      color: #000;
+      box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+    }
+
+    .zoom-btn.recommended::after {
+      content: '';
+      position: absolute;
+      bottom: 2px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 4px;
+      background: var(--primary);
+      border-radius: 50%;
+    }
+
+    /* Mode Selector */
+    .mode-bar {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      width: 100%;
+      max-width: 500px;
+      padding: 2px 4px;
+      scrollbar-width: none;
+      justify-content: center;
+    }
+
+    .mode-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .mode-btn {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .mode-btn.active {
+      background: var(--primary);
+      color: #000;
+      font-weight: 700;
+      border-color: var(--primary);
+      box-shadow: 0 2px 10px var(--primary-glow);
+    }
+
+    /* Shutter & Action Bar */
+    .action-bar {
+      width: 100%;
+      max-width: 420px;
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    .shutter-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      border: none;
+      background: linear-gradient(135deg, #10B981 0%, #38BDF8 50%, #6366F1 100%);
+      padding: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+      transition: all 0.15s ease;
+    }
+
+    .shutter-btn:active {
+      transform: scale(0.92);
+    }
+
+    .shutter-inner {
+      width: 100%;
+      height: 100%;
+      background: #0F172A;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .shutter-btn:hover .shutter-inner {
+      background: #1E293B;
+    }
+
+    .sub-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .sub-action-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .sub-action-btn:hover .sub-action-icon {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Modal / Bottom Sheet for Advice */
+    .sheet-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(6px);
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .sheet-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .bottom-sheet {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      max-height: 85vh;
+      background: var(--surface-card);
+      border-top: 1px solid var(--surface-border);
+      border-radius: 24px 24px 0 0;
+      z-index: 101;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+      padding-bottom: var(--safe-bottom);
+    }
+
+    .bottom-sheet.open {
+      transform: translateY(0);
+    }
+
+    .sheet-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 2px;
+      margin: 10px auto 6px;
+    }
+
+    .sheet-content {
+      padding: 16px 20px 24px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .score-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .score-circle {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: conic-gradient(var(--primary) calc(var(--score, 85) * 3.6deg), #1E293B 0deg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .score-circle-inner {
+      width: 48px;
+      height: 48px;
+      background: var(--surface);
+      border-radius: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .score-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1;
+    }
+
+    .score-lbl {
+      font-size: 8px;
+      color: var(--text-muted);
+    }
+
+    /* 3-Core-Tabs */
+    .sheet-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--surface-border);
+      margin-bottom: 14px;
+    }
+
+    .sheet-tab {
+      flex: 1;
+      padding: 10px 4px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .sheet-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      font-weight: 700;
+    }
+
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    .card-box {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-body {
+      font-size: 13px;
+      color: #E2E8F0;
+      line-height: 1.5;
+    }
+
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .pill-stat {
+      background: var(--surface);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+    }
+
+    .pill-stat.highlight {
+      border-color: rgba(56, 189, 248, 0.4);
+      background: rgba(30, 58, 138, 0.25);
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .stat-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .stat-value.accent {
+      color: var(--accent);
+    }
+
+    /* Checklist */
+    .checklist-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+
+    .check-box {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      border: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 2px;
+      flex-shrink: 0;
+      font-size: 12px;
+      color: #000;
+    }
+
+    .checklist-item.done .check-box {
+      background: var(--primary);
+    }
+
+    .checklist-item.done .check-title {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    .check-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .check-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: calc(180px + var(--safe-bottom));
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      padding: 8px 18px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 99;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Leveler Degree Pill */
+    #levelPill {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, calc(-50% + 46px));
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--gold);
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      z-index: 15;
+      pointer-events: none;
+      transition: all 0.2s;
+    }
+
+    #levelPill.level {
+      background: var(--primary);
+      color: #000;
+      border-color: var(--primary);
+    }
+
+    /* Web Companion Modal */
+    #webGuideModal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      z-index: 120;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    #webGuideModal.show {
+      display: flex;
+    }
+
+    .modal-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      max-width: 480px;
+      width: 100%;
+      padding: 24px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Viewfinder Area -->
+  <div class="viewfinder-container" id="viewfinder">
+    <video id="videoFeed" autoplay playsinline muted></video>
+    <img id="imageFeed" alt="Photo Viewfinder">
+    <canvas id="hudCanvas"></canvas>
+
+    <!-- Top Bar Controls -->
+    <div class="top-bar">
+      <div style="display: flex; gap: 8px;">
+        <button class="glass-btn" id="btnTorch" title="เปิด/ปิดไฟแฟลช">⚡ แฟลช</button>
+        <button class="glass-btn active" id="btnGrid" title="สลับตาราง">📏 กฎ 3 ส่วน</button>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="glass-btn active" id="btnLeveler" title="สลับระดับน้ำ">⚖️ ระดับน้ำ</button>
+        <button class="glass-btn" id="btnWebHelp" title="คู่มือทุกอุปกรณ์">🌐 ทุกอุปกรณ์</button>
+      </div>
+    </div>
+
+    <!-- Floating AI Director Pill -->
+    <div class="director-pill" id="directorPill">
+      <span>✨ คะแนน <b id="pillScore">88</b>/100</span>
+      <span style="color: var(--primary);">• แนะนำซูม <b id="pillZoom">2.0x</b></span>
+      <span style="color: var(--accent); margin-left: 4px;">ดูวิธีปรับ →</span>
+    </div>
+
+    <!-- Leveler Pill -->
+    <div id="levelPill">LEVEL 0.0°</div>
+
+    <!-- Sample Scene Selector Bar -->
+    <div class="sample-pill-bar">
+      <div class="sample-chip active" data-sample="portrait">👤 ภาพบุคคลริมหน้าต่าง</div>
+      <div class="sample-chip" data-sample="food">🍰 อาหาร & กาแฟมัทฉะ</div>
+      <div class="sample-chip" data-sample="sunset">🌄 พระอาทิตย์ตกริมทะเล</div>
+      <div class="sample-chip" data-sample="live">📷 สลับกล้องสด WebCam</div>
+    </div>
+  </div>
+
+  <!-- Bottom Cockpit -->
+  <div class="cockpit">
+    <!-- Zoom Selector -->
+    <div class="zoom-bar">
+      <button class="zoom-btn" data-zoom="0.6">.6x</button>
+      <button class="zoom-btn" data-zoom="1.0">1x</button>
+      <button class="zoom-btn active recommended" data-zoom="2.0">2x</button>
+      <button class="zoom-btn" data-zoom="3.0">3x</button>
+      <button class="zoom-btn" data-zoom="5.0">5x</button>
+    </div>
+
+    <!-- Camera Mode Bar -->
+    <div class="mode-bar">
+      <button class="mode-btn" data-mode="AUTO">✨ อัตโนมัติ</button>
+      <button class="mode-btn active" data-mode="PORTRAIT">👤 บุคคล</button>
+      <button class="mode-btn" data-mode="FOOD">🍰 อาหาร</button>
+      <button class="mode-btn" data-mode="LANDSCAPE">🌄 วิว</button>
+      <button class="mode-btn" data-mode="PRODUCT">📦 สินค้า</button>
+      <button class="mode-btn" data-mode="NIGHT">🌙 กลางคืน</button>
+    </div>
+
+    <!-- Shutter & Extra Controls -->
+    <div class="action-bar">
+      <!-- File Upload button -->
+      <label class="sub-action-btn" for="fileInput" style="cursor: pointer;">
+        <div class="sub-action-icon">🖼️</div>
+        <span>อัปโหลด</span>
+      </label>
+      <input type="file" id="fileInput" accept="image/*">
+
+      <!-- AI Shutter Button -->
+      <button class="shutter-btn" id="shutterBtn" title="วิเคราะห์มุมถ่ายภาพด้วย AI">
+        <div class="shutter-inner">
+          <span style="font-size: 26px;">✨</span>
+        </div>
+      </button>
+
+      <!-- View Advice Button -->
+      <button class="sub-action-btn" id="btnOpenSheet">
+        <div class="sub-action-icon" style="color: var(--primary); border-color: var(--primary);">📋</div>
+        <span style="color: var(--primary); font-weight: 700;">คำแนะนำ</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Advice Bottom Sheet -->
+<div class="sheet-overlay" id="sheetOverlay"></div>
+<div class="bottom-sheet" id="adviceSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-content">
+    <div class="score-banner">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div class="score-circle" id="scoreCircleRing">
+          <div class="score-circle-inner">
+            <span class="score-val" id="sheetScoreVal">88</span>
+            <span class="score-lbl">คะแนน</span>
+          </div>
+        </div>
+        <div>
+          <h3 id="sheetModeTitle" style="font-size: 17px; font-weight: 800; color: #fff;">Portrait (ภาพบุคคล)</h3>
+          <p style="font-size: 12px; color: var(--text-muted);">AI Photography Director</p>
+        </div>
+      </div>
+      <button class="glass-btn" id="btnSaveAdvice" style="border-color: rgba(56, 189, 248, 0.4);">
+        💾 บันทึก
+      </button>
+    </div>
+
+    <!-- 3 Question Tabs -->
+    <div class="sheet-tabs">
+      <div class="sheet-tab active" data-tab="target">🎯 ควรถ่ายจุดไหน</div>
+      <div class="sheet-tab" data-tab="zoom">🔍 ซูมแค่ไหน</div>
+      <div class="sheet-tab" data-tab="settings">⚙️ ปรับอะไรแค่ไหน</div>
+    </div>
+
+    <!-- TAB 1: ควรถ่ายจุดไหน -->
+    <div class="tab-panel active" id="tabTarget">
+      <div class="card-box">
+        <div class="card-title">🎯 จุดโฟกัสและตำแหน่งหลัก (Focal Point)</div>
+        <div class="card-body" id="focalPointText">
+          โฟกัสที่ดวงตาของตัวแบบ (Eye-level focus) โดยวางตาบนจุดตัดเก้าช่องบนขวาตามกฎสามส่วน
+        </div>
+      </div>
+
+      <div class="card-box">
+        <div class="card-title">📐 มุมกล้องและการวางกรอบ (Angle & Headroom)</div>
+        <div class="card-body" id="angleText">
+          ระดับสายตา (Eye-level) หรือมุมเสยขึ้นเล็กน้อย 15° เพื่อให้ใบหน้าดูเรียว เว้นพื้นที่ว่างเหนือศีรษะ (Headroom) ประมาณ 15%
+        </div>
+      </div>
+
+      <div class="card-box">
+        <div class="card-title">✨ กฎการจัดองค์ประกอบภาพที่แนะนำ</div>
+        <div class="card-body" id="rulesText" style="color: var(--accent);">
+          • Rule of Thirds (กฎสามส่วน)<br>
+          • Headroom Balance (ระยะเว้นว่างเหนือศีรษะ)<br>
+          • Looking Room (เว้นพื้นที่ฝั่งที่ตัวแบบมองไป)
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ซูมแค่ไหน -->
+    <div class="tab-panel" id="tabZoom">
+      <div class="card-box">
+        <div class="card-title">🔍 ระยะซูมที่แนะนำ</div>
+        <div class="card-body" id="zoomAdviceText" style="font-size: 15px; font-weight: 700; color: var(--pink);">
+          2.0x (Optimal Portrait Compression)
+        </div>
+        <div class="card-body" style="margin-top: 4px; font-size: 12px; color: var(--text-muted);">
+          เลนส์ 1x บนมือถือคือเลนส์ไวด์ (Wide Angle) หากยื่นใกล้หน้า หน้าจะบวมและจมูกโต การ "ถอยหลัง 2 ก้าวแล้วซูม 2x" จะช่วยให้สัดส่วนใบหน้าถูกต้องสมจริงและละลายฉากหลังนุ่มนวล
+        </div>
+      </div>
+
+      <div class="card-box">
+        <div class="card-title">📏 ระยะยืนห่างจากวัตถุ (Distance)</div>
+        <div class="card-body" id="distanceText">
+          ยืนห่างจากตัวแบบประมาณ 1.8 - 2.2 เมตร
+        </div>
+      </div>
+
+      <button class="glass-btn" id="btnApplyZoom" style="width: 100%; height: 44px; background: #2563EB; border-color: #38BDF8; font-weight: 700; font-size: 13px;">
+        ปรับระยะซูมเป็น 2.0x ทันที
+      </button>
+    </div>
+
+    <!-- TAB 3: ปรับอะไรแค่ไหน -->
+    <div class="tab-panel" id="tabSettings">
+      <div class="card-box">
+        <div class="card-title">⚙️ ค่ากล้องที่แนะนำ (Camera Settings)</div>
+        <div class="settings-grid">
+          <div class="pill-stat highlight">
+            <div class="stat-label">ชดเชยแสง (EV)</div>
+            <div class="stat-value accent" id="valEV">+0.3 EV</div>
+          </div>
+          <div class="pill-stat">
+            <div class="stat-label">ความไวแสง (ISO)</div>
+            <div class="stat-value" id="valISO">ISO 200</div>
+          </div>
+          <div class="pill-stat">
+            <div class="stat-label">สปีดชัตเตอร์</div>
+            <div class="stat-value" id="valShutter">1/200s</div>
+          </div>
+          <div class="pill-stat">
+            <div class="stat-label">รูรับแสง (Aperture)</div>
+            <div class="stat-value" id="valAperture">f/2.0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-box">
+        <div class="card-title">💡 คำแนะนำทิศทางแสงและแฟลช</div>
+        <div class="card-body" id="lightingText">
+          หันตัวแบบเฉียง 45° เข้าหาแสงธรรมชาติริมหน้าต่าง (Rembrandt Light) ปิดแฟลชหัวกล้องเพื่อป้องกันผิวหน้ามันเยิ้ม
+        </div>
+      </div>
+
+      <div class="card-box">
+        <div class="card-title">⚖️ ระนาบกล้อง</div>
+        <div class="card-body" id="tiltText">
+          ระนาบตรง 0.0° รักษาให้แถบวัดระดับน้ำเป็นสีเขียว
+        </div>
+      </div>
+    </div>
+
+    <!-- Actionable Checklist -->
+    <div style="margin-top: 18px;">
+      <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 8px;">เช็กลิสต์ปรับปรุงภาพ 3 ขั้นตอน:</h4>
+      <div id="checklistContainer"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Web Companion & All Devices Modal -->
+<div id="webGuideModal">
+  <div class="modal-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <h3 style="font-size: 18px; font-weight: 800; color: #fff;">🌐 ใช้งานได้ทุกอุปกรณ์ผ่าน Website</h3>
+      <button class="glass-btn" id="btnCloseModal" style="padding: 0 10px; height: 32px;">✕</button>
+    </div>
+
+    <p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">
+      แอปพลิเคชัน <b>CamDirector AI</b> ออกแบบมาให้ทำงานบน Web Browser ได้อย่างสมบูรณ์แบบบน <b>iPhone, Android, iPad, Mac, Windows และ Chromebook</b> โดยไม่ต้องติดตั้งแอปพลิเคชัน
+    </p>
+
+    <div class="card-box" style="margin-bottom: 12px;">
+      <div class="card-title">📱 1. บนมือถือหรือแท็บเล็ต</div>
+      <div class="card-body">
+        เปิดลิงก์ผ่าน Safari หรือ Chrome เพื่อใช้กล้องสดและเซนเซอร์ระดับน้ำ (Gyroscope) จะตรวจจับการเอียงเครื่องแบบเรียลไทม์
+      </div>
+    </div>
+
+    <div class="card-box" style="margin-bottom: 12px;">
+      <div class="card-title">💻 2. บนคอมพิวเตอร์ / โน้ตบุ๊ก</div>
+      <div class="card-body">
+        คลิกปุ่ม <b>"อัปโหลด"</b> ด้านล่างเพื่อส่งรูปถ่ายจากเครื่องมาให้ AI ช่วยจัดมุม หรือคลิกเลือก <b>ฉากตัวอย่างด้านบน</b> เพื่อทดสอบคำแนะนำได้ทันที
+      </div>
+    </div>
+
+    <div class="card-box" style="margin-bottom: 16px;">
+      <div class="card-title">⚖️ 3. จำลองการเอียงเครื่อง (Tilt Simulator)</div>
+      <div class="card-body">
+        <label style="font-size: 12px; display: block; margin-bottom: 6px;">เลื่อนปรับองศาเอียงจำลอง:</label>
+        <input type="range" id="simTiltSlider" min="-30" max="30" value="0" style="width: 100%;">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-top: 4px; color: var(--text-muted);">
+          <span>-30° เอียงซ้าย</span>
+          <span id="simTiltVal" style="color: var(--primary); font-weight: 700;">0.0° ตรงเป๊ะ</span>
+          <span>+30° เอียงขวา</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="glass-btn" id="btnRequestSensor" style="width: 100%; height: 42px; background: var(--primary); color: #000; font-weight: 700;">
+      เปิดใช้งานเซนเซอร์ Gyroscope บนมือถือ
+    </button>
+  </div>
+</div>
+
+<div id="toast">บันทึกเรียบร้อย</div>
+
+<script>
+// --- State & Scenarios ---
+const SCENARIOS = {
+  portrait: {
+    title: "ภาพบุคคลริมหน้าต่างคาเฟ่",
+    category: "PORTRAIT",
+    score: 88,
+    zoom: 2.0,
+    zoomStr: "2.0x (Optimal Portrait)",
+    box: { ymin: 0.18, xmin: 0.25, ymax: 0.78, xmax: 0.75 },
+    focal: "โฟกัสที่ดวงตาของตัวแบบ (Eye Focus) โดยวางตาบนจุดตัดเก้าช่องบนขวาตามกฎสามส่วน",
+    angle: "ระดับสายตา (Eye-level) หรือกดกล้องต่ำลง 5° เล็กน้อยเพื่อให้ใบหน้าดูเรียวได้รูป เว้น Headroom ประมาณ 15%",
+    rules: "• Rule of Thirds (จัดตำแหน่งดวงตาบนเส้นตัดบน)\n• Headroom Balance (เว้นระยะเหนือศีรษะพอดี)\n• Looking Room (เว้นพื้นที่ฝั่งที่มองไป)",
+    distance: "ยืนห่างจากตัวแบบประมาณ 1.8 - 2.2 เมตร",
+    ev: "+0.3 EV",
+    iso: "ISO 200",
+    shutter: "1/200s",
+    aperture: "f/2.0",
+    lighting: "ให้ตัวแบบหันหน้าเฉียง 45° เข้าหาแสงหน้าต่าง (Rembrandt Lighting) ปิดแฟลชหัวกล้อง",
+    tilt: "ระนาบตั้งตรง 0.0° รักษาแถบสีเขียว",
+    steps: [
+      { id: 1, title: "สลับเป็นระยะซูม 2x", desc: "ป้องกันสัดส่วนใบหน้าบวมขยายจากเลนส์ไวด์", done: true },
+      { id: 2, title: "จัดให้ดวงตาตรงจุดตัดบนขวา", desc: "ดึงดูดสายตาอย่างเป็นธรรมชาติ", done: true },
+      { id: 3, title: "ชดเชยแสง +0.3 EV", desc: "ผิวหน้าจะดูผ่องใสขึ้นท่ามกลางแสงข้างหน้าต่าง", done: false }
+    ],
+    // High quality aesthetic SVG portrait scene
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="100%" height="100%">
+      <defs>
+        <linearGradient id="cafeBg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#2D1B16"/>
+          <stop offset="50%" stop-color="#4A3025"/>
+          <stop offset="100%" stop-color="#1E120D"/>
+        </linearGradient>
+        <radialGradient id="winLight" cx="20%" cy="30%" r="70%">
+          <stop offset="0%" stop-color="#FFF3E0" stop-opacity="0.9"/>
+          <stop offset="40%" stop-color="#FFE0B2" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#FFE0B2" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="faceGrad" cx="40%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#FFE0BD"/>
+          <stop offset="60%" stop-color="#F7C09E"/>
+          <stop offset="100%" stop-color="#D99775"/>
+        </radialGradient>
+      </defs>
+      <rect width="600" height="800" fill="url(#cafeBg)"/>
+      <rect x="0" y="50" width="220" height="700" fill="#FFE0B2" opacity="0.15"/>
+      <circle cx="120" cy="220" r="300" fill="url(#winLight)"/>
+      <!-- Soft blurred plants & cafe lights -->
+      <circle cx="480" cy="180" r="45" fill="#FFB74D" opacity="0.25"/>
+      <circle cx="520" cy="300" r="35" fill="#FFD54F" opacity="0.2"/>
+      <circle cx="80" cy="550" r="60" fill="#81C784" opacity="0.15"/>
+      <!-- Woman Portrait Silhouette & Form -->
+      <ellipse cx="320" cy="680" rx="190" ry="160" fill="#3E2723"/>
+      <!-- Hair back -->
+      <path d="M 210,320 Q 180,480 230,620 Q 320,640 410,620 Q 460,480 430,320 Z" fill="#211510"/>
+      <!-- Neck -->
+      <rect x="285" y="440" width="70" height="90" fill="#E8A783" rx="10"/>
+      <!-- Face -->
+      <ellipse cx="320" cy="350" rx="90" ry="115" fill="url(#faceGrad)"/>
+      <!-- Hair front bangs & flow -->
+      <path d="M 210,310 Q 320,200 430,310 Q 390,260 320,270 Q 250,260 210,310 Z" fill="#1A0F0A"/>
+      <path d="M 210,310 Q 190,440 220,530 Q 240,430 250,370 Z" fill="#1A0F0A"/>
+      <path d="M 430,310 Q 450,440 420,530 Q 400,430 390,370 Z" fill="#1A0F0A"/>
+      <!-- Eyes positioned on Rule of Thirds -->
+      <ellipse cx="285" cy="340" rx="14" ry="7" fill="#3E2723"/>
+      <ellipse cx="355" cy="340" rx="14" ry="7" fill="#3E2723"/>
+      <circle cx="288" cy="339" r="4" fill="#FFFFFF"/>
+      <circle cx="358" cy="339" r="4" fill="#FFFFFF"/>
+      <!-- Eyebrows -->
+      <path d="M 270,325 Q 285,320 302,326" stroke="#2B1810" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <path d="M 338,326 Q 355,320 370,325" stroke="#2B1810" stroke-width="3" stroke-linecap="round" fill="none"/>
+      <!-- Nose & Smile -->
+      <path d="M 320,345 L 315,380 L 325,382" stroke="#C97F5B" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+      <path d="M 298,415 Q 320,435 342,415" stroke="#B71C1C" stroke-width="4" stroke-linecap="round" fill="#E57373"/>
+      <!-- Window light rim highlights -->
+      <path d="M 235,320 Q 230,400 245,440" stroke="#FFF8E1" stroke-width="4" opacity="0.6" fill="none"/>
+      <text x="300" y="750" fill="#FFF" opacity="0.4" font-family="sans-serif" font-size="14" text-anchor="middle">CamDirector AI • Portrait Mode</text>
+    </svg>`
+  },
+  food: {
+    title: "เครื่องดื่มมัทฉะ & ขนมเบเกอรี่คาเฟ่",
+    category: "FOOD",
+    score: 92,
+    zoom: 2.5,
+    zoomStr: "2.5x (Food Close-up)",
+    box: { ymin: 0.22, xmin: 0.20, ymax: 0.82, xmax: 0.80 },
+    focal: "โฟกัสที่ชั้นฟองนมและเลเยอร์ชาเขียวมัทฉะ พร้อมให้ครัวซองต์อยู่ระนาบรองสร้างความลึก",
+    angle: "มุม 45 องศา (Diner's Perspective) ซึ่งเป็นมุมมองเดียวกับสายตาขณะนั่งรับประทาน",
+    rules: "• Diagonal / Triangle Composition (วางแก้วและจานเป็นสามเหลี่ยม)\n• Texture Highlights (จับประกายน้ำแข็งและเกล็ดขนม)\n• Shallow Depth of Field",
+    distance: "รักษาระยะห่าง 60 - 80 ซม. ซูมเพื่อหลีกเลี่ยงเงาโทรศัพท์ตกกระทบ",
+    ev: "+0.7 EV",
+    iso: "ISO 100",
+    shutter: "1/160s",
+    aperture: "f/2.8",
+    lighting: "แสงด้านข้าง (Side Light) ช่วยดึง Texture ของครัวซองต์ ปิดแฟลชเด็ดขาดเพื่อไม่ให้อาหารดูแบน",
+    tilt: "เอียงลง 45.0° เล็งเข้าหาหน้าจาน",
+    steps: [
+      { id: 1, title: "ปรับมุมกล้องเฉียง 45°", desc: "มุมมองเสมือนจริงชวนรับประทานที่สุด", done: true },
+      { id: 2, title: "ชดเชยแสง +0.7 EV", desc: "อาหารจะดูสดใส ไม่หม่นหมอง", done: true },
+      { id: 3, title: "หมุนแก้วให้เห็นเลเยอร์ชัดเจน", desc: "เน้นจุดตัดของสีเขียวมัทฉะและนมสด", done: false }
+    ],
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="100%" height="100%">
+      <defs>
+        <linearGradient id="marbleTbl" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#E2E8F0"/>
+          <stop offset="50%" stop-color="#CBD5E1"/>
+          <stop offset="100%" stop-color="#94A3B8"/>
+        </linearGradient>
+        <linearGradient id="matchaGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="#2E7D32"/>
+          <stop offset="55%" stop-color="#4CAF50"/>
+          <stop offset="75%" stop-color="#FFF9C4"/>
+          <stop offset="100%" stop-color="#FFFFFF"/>
+        </linearGradient>
+      </defs>
+      <rect width="600" height="800" fill="url(#marbleTbl)"/>
+      <!-- Table Napkin -->
+      <polygon points="50,150 250,80 320,380 90,440" fill="#F1F5F9" opacity="0.8"/>
+      <!-- Plate -->
+      <ellipse cx="400" cy="520" rx="160" ry="110" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="4"/>
+      <ellipse cx="400" cy="520" rx="130" ry="85" fill="#F8FAFC"/>
+      <!-- Flaky Croissant -->
+      <path d="M 310,510 Q 360,450 440,470 Q 500,510 470,550 Q 410,565 340,545 Z" fill="#D97706"/>
+      <path d="M 340,495 Q 400,475 445,495" stroke="#B45309" stroke-width="6" stroke-linecap="round" fill="none"/>
+      <path d="M 370,515 Q 415,505 450,525" stroke="#92400E" stroke-width="5" stroke-linecap="round" fill="none"/>
+      <!-- Iced Matcha Glass -->
+      <!-- Shadow -->
+      <ellipse cx="230" cy="490" rx="75" ry="30" fill="#000" opacity="0.18"/>
+      <!-- Glass Body -->
+      <path d="M 175,270 L 190,480 Q 230,500 270,480 L 285,270 Z" fill="url(#matchaGrad)" stroke="#E2E8F0" stroke-width="3"/>
+      <!-- Glass Rim -->
+      <ellipse cx="230" cy="270" rx="55" ry="16" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="3"/>
+      <!-- Ice cubes -->
+      <rect x="205" y="275" width="28" height="26" rx="4" fill="#FFFFFF" opacity="0.7" transform="rotate(15 205 275)"/>
+      <rect x="225" y="295" width="25" height="24" rx="4" fill="#E0F2FE" opacity="0.6" transform="rotate(-20 225 295)"/>
+      <!-- Straw -->
+      <line x1="240" y1="210" x2="210" y2="450" stroke="#10B981" stroke-width="8" stroke-linecap="round"/>
+      <text x="300" y="750" fill="#1E293B" opacity="0.5" font-family="sans-serif" font-size="14" text-anchor="middle">CamDirector AI • Food Photography Mode</text>
+    </svg>`
+  },
+  sunset: {
+    title: "พระอาทิตย์ตกริมหน้าผาและทะเล",
+    category: "LANDSCAPE",
+    score: 86,
+    zoom: 1.0,
+    zoomStr: "1.0x (Wide Horizon)",
+    box: { ymin: 0.20, xmin: 0.15, ymax: 0.85, xmax: 0.85 },
+    focal: "โฟกัสดวงอาทิตย์หรือแนวสันหน้าผาหิน และจัดเส้นขอบฟ้าให้อยู่ที่เส้น 1/3 ล่าง",
+    angle: "ระดับสายตา แนวนอนขนานพื้นโลก โดยตรวจจับระนาบให้เส้นขอบฟ้าตรง 0.0° เสมอ",
+    rules: "• Rule of Thirds (เส้นขอบฟ้าที่ 1/3)\n• Leading Lines (แนวหน้าผาและคลื่นนำสายตาสู่ดวงอาทิตย์)\n• Level Horizon 0.0°",
+    distance: "ระยะอนันต์ (Infinity Focus) เก็บความกว้างของท้องฟ้า",
+    ev: "-0.3 EV",
+    iso: "ISO 100",
+    shutter: "1/500s",
+    aperture: "f/8.0",
+    lighting: "แสงย้อนช่วงเวลาทอง (Golden Hour Backlight) แสงส้มทองสะท้อนผิวน้ำ",
+    tilt: "ระนาบระดับน้ำ 0.0° (ห้ามเอียง)",
+    steps: [
+      { id: 1, title: "เช็คเส้นระนาบน้ำ (Horizon Level)", desc: "เปิด Leveler เพื่อให้เส้นขอบฟ้าตรงเป๊ะ 0°", done: true },
+      { id: 2, title: "ลดค่าชดเชยแสง -0.3 EV", desc: "ป้องกันสีทองของท้องฟ้าไม่ให้ขาวโพลน", done: true },
+      { id: 3, title: "จัดดวงอาทิตย์ไว้ที่จุดตัดซ้าย/ขวา", desc: "เพิ่มความน่าสนใจทางสายตา", done: false }
+    ],
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="100%" height="100%">
+      <defs>
+        <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1E1B4B"/>
+          <stop offset="35%" stop-color="#7C2D12"/>
+          <stop offset="60%" stop-color="#EA580C"/>
+          <stop offset="85%" stop-color="#FBBF24"/>
+          <stop offset="100%" stop-color="#FEF08A"/>
+        </linearGradient>
+        <linearGradient id="seaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#B45309"/>
+          <stop offset="30%" stop-color="#1E3A8A"/>
+          <stop offset="100%" stop-color="#0F172A"/>
+        </linearGradient>
+      </defs>
+      <!-- Sky -->
+      <rect width="600" height="530" fill="url(#skyGrad)"/>
+      <!-- Glowing Sun on Rule of Thirds -->
+      <circle cx="380" cy="460" r="42" fill="#FFFFFF"/>
+      <circle cx="380" cy="460" r="75" fill="#FDE047" opacity="0.45"/>
+      <circle cx="380" cy="460" r="140" fill="#F97316" opacity="0.25"/>
+      <!-- Clouds -->
+      <ellipse cx="200" cy="280" rx="140" ry="22" fill="#BE185D" opacity="0.4"/>
+      <ellipse cx="440" cy="340" rx="110" ry="18" fill="#C2410C" opacity="0.45"/>
+      <!-- Sea Horizon at 1/3 lower line (y=530) -->
+      <rect y="530" width="600" height="270" fill="url(#seaGrad)"/>
+      <!-- Sun reflection path -->
+      <polygon points="360,530 400,530 460,800 300,800" fill="#FDE047" opacity="0.4"/>
+      <!-- Cliffs (Leading lines) -->
+      <polygon points="0,480 180,510 140,800 0,800" fill="#18181B"/>
+      <polygon points="0,520 220,545 160,800 0,800" fill="#27272A"/>
+      <text x="300" y="770" fill="#FFF" opacity="0.4" font-family="sans-serif" font-size="14" text-anchor="middle">CamDirector AI • Sunset Landscape</text>
+    </svg>`
+  }
+};
+
+// --- App State ---
+let currentScenario = SCENARIOS.portrait;
+let currentZoom = 2.0;
+let currentMode = "PORTRAIT";
+let isGridVisible = true;
+let isLevelerVisible = true;
+let isTorchOn = false;
+let currentRoll = 0.0;
+let isCameraStreamActive = false;
+let mediaStream = null;
+
+// --- Elements ---
+const videoFeed = document.getElementById("videoFeed");
+const imageFeed = document.getElementById("imageFeed");
+const hudCanvas = document.getElementById("hudCanvas");
+const ctx = hudCanvas.getContext("2d");
+const directorPill = document.getElementById("directorPill");
+const pillScore = document.getElementById("pillScore");
+const pillZoom = document.getElementById("pillZoom");
+const levelPill = document.getElementById("levelPill");
+const adviceSheet = document.getElementById("adviceSheet");
+const sheetOverlay = document.getElementById("sheetOverlay");
+const toast = document.getElementById("toast");
+const webGuideModal = document.getElementById("webGuideModal");
+const fileInput = document.getElementById("fileInput");
+
+// --- Canvas Sizing ---
+function resizeCanvas() {
+  const rect = hudCanvas.getBoundingClientRect();
+  hudCanvas.width = rect.width * window.devicePixelRatio;
+  hudCanvas.height = rect.height * window.devicePixelRatio;
+  drawHud();
+}
+window.addEventListener("resize", resizeCanvas);
+
+// --- HUD Drawing Engine ---
+function drawHud() {
+  const w = hudCanvas.width;
+  const h = hudCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  if (w === 0 || h === 0) return;
+
+  // 1. Draw Rule of Thirds Grid
+  if (isGridVisible) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.lineWidth = 1.5 * window.devicePixelRatio;
+
+    const col1 = w / 3;
+    const col2 = (w / 3) * 2;
+    const row1 = h / 3;
+    const row2 = (h / 3) * 2;
+
+    ctx.beginPath();
+    ctx.moveTo(col1, 0); ctx.lineTo(col1, h);
+    ctx.moveTo(col2, 0); ctx.lineTo(col2, h);
+    ctx.moveTo(0, row1); ctx.lineTo(w, row1);
+    ctx.moveTo(0, row2); ctx.lineTo(w, row2);
+    ctx.stroke();
+
+    // 4 Power Points
+    const pts = [
+      [col1, row1], [col2, row1],
+      [col1, row2], [col2, row2]
+    ];
+    pts.forEach(([x, y]) => {
+      ctx.fillStyle = "rgba(251, 191, 36, 0.85)";
+      ctx.beginPath();
+      ctx.arc(x, y, 5 * window.devicePixelRatio, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  // 2. Draw Target Bounding Box
+  if (currentScenario.box) {
+    const box = currentScenario.box;
+    const bx = box.xmin * w;
+    const by = box.ymin * h;
+    const bw = (box.xmax - box.xmin) * w;
+    const bh = (box.ymax - box.ymin) * h;
+
+    const cornerLen = Math.max(20 * window.devicePixelRatio, bw * 0.16);
+    const stroke = 3 * window.devicePixelRatio;
+
+    ctx.strokeStyle = "#10B981";
+    ctx.lineWidth = stroke;
+    ctx.lineCap = "round";
+
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(bx, by + cornerLen);
+    ctx.lineTo(bx, by);
+    ctx.lineTo(bx + cornerLen, by);
+    ctx.stroke();
+
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(bx + bw - cornerLen, by);
+    ctx.lineTo(bx + bw, by);
+    ctx.lineTo(bx + bw, by + cornerLen);
+    ctx.stroke();
+
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh - cornerLen);
+    ctx.lineTo(bx, by + bh);
+    ctx.lineTo(bx + cornerLen, by + bh);
+    ctx.stroke();
+
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(bx + bw - cornerLen, by + bh);
+    ctx.lineTo(bx + bw, by + bh);
+    ctx.lineTo(bx + bw, by + bh - cornerLen);
+    ctx.stroke();
+
+    // Center crosshair
+    const cx = bx + bw / 2;
+    const cy = by + bh / 2;
+    const crossSize = 10 * window.devicePixelRatio;
+    ctx.lineWidth = 1.5 * window.devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(cx - crossSize, cy); ctx.lineTo(cx + crossSize, cy);
+    ctx.moveTo(cx, cy - crossSize); ctx.lineTo(cx, cy + crossSize);
+    ctx.stroke();
+  }
+
+  // 3. Electronic Horizon Leveler
+  if (isLevelerVisible) {
+    const cx = w / 2;
+    const cy = h / 2;
+    const barLen = 100 * window.devicePixelRatio;
+    const isLevel = Math.abs(currentRoll) <= 1.5;
+    const levelColor = isLevel ? "#10B981" : "#FBBF24";
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((-currentRoll * Math.PI) / 180);
+
+    ctx.strokeStyle = levelColor;
+    ctx.lineWidth = 2.5 * window.devicePixelRatio;
+    ctx.beginPath();
+    ctx.moveTo(-barLen, 0); ctx.lineTo(-18 * window.devicePixelRatio, 0);
+    ctx.moveTo(18 * window.devicePixelRatio, 0); ctx.lineTo(barLen, 0);
+    ctx.stroke();
+
+    ctx.fillStyle = levelColor;
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5 * window.devicePixelRatio, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+
+    // Leveler pill UI
+    levelPill.style.display = "block";
+    levelPill.textContent = isLevel ? "LEVEL 0.0°" : `${currentRoll > 0 ? "+" : ""}${currentRoll.toFixed(1)}°`;
+    if (isLevel) {
+      levelPill.classList.add("level");
+    } else {
+      levelPill.classList.remove("level");
+    }
+  } else {
+    levelPill.style.display = "none";
+  }
+}
+
+// --- Scene Rendering ---
+function renderScenario(scene) {
+  currentScenario = scene;
+  pillScore.textContent = scene.score;
+  pillZoom.textContent = scene.zoomStr;
+
+  // Render SVG in image element
+  const blob = new Blob([scene.svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  imageFeed.src = url;
+  imageFeed.style.display = "block";
+  videoFeed.style.display = "none";
+
+  applyZoom(scene.zoom);
+  populateAdviceSheet(scene);
+  drawHud();
+}
+
+function applyZoom(zoom) {
+  currentZoom = zoom;
+  document.querySelectorAll(".zoom-btn").forEach(btn => {
+    btn.classList.toggle("active", parseFloat(btn.dataset.zoom) === zoom);
+  });
+  imageFeed.style.transform = `scale(${zoom})`;
+  videoFeed.style.transform = `scale(${zoom})`;
+}
+
+function populateAdviceSheet(scene) {
+  document.getElementById("sheetScoreVal").textContent = scene.score;
+  document.getElementById("sheetModeTitle").textContent = `${scene.category} • ${scene.title}`;
+  document.getElementById("scoreCircleRing").style.setProperty("--score", scene.score);
+
+  document.getElementById("focalPointText").textContent = scene.focal;
+  document.getElementById("angleText").textContent = scene.angle;
+  document.getElementById("rulesText").innerHTML = scene.rules.replace(/\n/g, "<br>");
+
+  document.getElementById("zoomAdviceText").textContent = scene.zoomStr;
+  document.getElementById("distanceText").textContent = scene.distance;
+  document.getElementById("btnApplyZoom").textContent = `ปรับระยะซูมเป็น ${scene.zoom}x ทันที`;
+
+  document.getElementById("valEV").textContent = scene.ev;
+  document.getElementById("valISO").textContent = scene.iso;
+  document.getElementById("valShutter").textContent = scene.shutter;
+  document.getElementById("valAperture").textContent = scene.aperture;
+  document.getElementById("lightingText").textContent = scene.lighting;
+  document.getElementById("tiltText").textContent = scene.tilt;
+
+  // Render checklist
+  const container = document.getElementById("checklistContainer");
+  container.innerHTML = "";
+  scene.steps.forEach(step => {
+    const item = document.createElement("div");
+    item.className = `checklist-item ${step.done ? "done" : ""}`;
+    item.innerHTML = `
+      <div class="check-box">${step.done ? "✓" : ""}</div>
+      <div>
+        <div class="check-title">${step.title}</div>
+        <div class="check-desc">${step.desc}</div>
+      </div>
+    `;
+    item.addEventListener("click", () => {
+      step.done = !step.done;
+      item.classList.toggle("done", step.done);
+      item.querySelector(".check-box").textContent = step.done ? "✓" : "";
+    });
+    container.appendChild(item);
+  });
+}
+
+// --- Live Camera Streaming ---
+async function startLiveCamera() {
+  try {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+    }
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
+      },
+      audio: false
+    });
+    videoFeed.srcObject = mediaStream;
+    videoFeed.style.display = "block";
+    imageFeed.style.display = "none";
+    isCameraStreamActive = true;
+    showToast("เชื่อมต่อกล้องสดสำเร็จ");
+  } catch (err) {
+    console.warn("Camera access failed or unavailable:", err);
+    showToast("ไม่สามารถเปิดกล้องได้ ใช้วิธีเลือกฉากตัวอย่างหรืออัปโหลดรูปแทน");
+    renderScenario(SCENARIOS.portrait);
+  }
+}
+
+// --- Device Gyroscope & Leveler ---
+function initOrientation() {
+  if (window.DeviceOrientationEvent) {
+    window.addEventListener("deviceorientation", (e) => {
+      if (e.gamma !== null) {
+        // e.gamma is roll in degrees (-90 to 90)
+        currentRoll = Math.round(e.gamma * 10) / 10;
+        drawHud();
+      }
+    }, true);
+  }
+}
+
+// --- Event Listeners ---
+
+// Top Bar
+document.getElementById("btnGrid").addEventListener("click", function() {
+  isGridVisible = !isGridVisible;
+  this.classList.toggle("active", isGridVisible);
+  drawHud();
+});
+
+document.getElementById("btnLeveler").addEventListener("click", function() {
+  isLevelerVisible = !isLevelerVisible;
+  this.classList.toggle("active", isLevelerVisible);
+  drawHud();
+});
+
+document.getElementById("btnTorch").addEventListener("click", async function() {
+  isTorchOn = !isTorchOn;
+  this.classList.toggle("active", isTorchOn);
+  if (mediaStream) {
+    const track = mediaStream.getVideoTracks()[0];
+    if (track && track.applyConstraints) {
+      try {
+        await track.applyConstraints({ advanced: [{ torch: isTorchOn }] });
+      } catch (e) {
+        console.warn("Torch not supported on this device track");
+      }
+    }
+  }
+  showToast(isTorchOn ? "เปิดไฟฉาย" : "ปิดไฟฉาย");
+});
+
+document.getElementById("btnWebHelp").addEventListener("click", () => {
+  webGuideModal.classList.add("show");
+});
+document.getElementById("btnCloseModal").addEventListener("click", () => {
+  webGuideModal.classList.remove("show");
+});
+
+// Tilt Simulation Slider in Web Modal
+const simSlider = document.getElementById("simTiltSlider");
+simSlider.addEventListener("input", (e) => {
+  currentRoll = parseFloat(e.target.value);
+  document.getElementById("simTiltVal").textContent = `${currentRoll > 0 ? "+" : ""}${currentRoll.toFixed(1)}°`;
+  drawHud();
+});
+
+document.getElementById("btnRequestSensor").addEventListener("click", async () => {
+  if (typeof DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission === "function") {
+    try {
+      const resp = await DeviceOrientationEvent.requestPermission();
+      if (resp === "granted") {
+        initOrientation();
+        showToast("เปิดใช้งานเซนเซอร์เรียบร้อย");
+      }
+    } catch (e) {
+      showToast("อนุญาตเซนเซอร์ไม่สำเร็จ");
+    }
+  } else {
+    initOrientation();
+    showToast("เซนเซอร์พร้อมใช้งาน");
+  }
+  webGuideModal.classList.remove("show");
+});
+
+// Sample Scene Chips
+document.querySelectorAll(".sample-chip").forEach(chip => {
+  chip.addEventListener("click", () => {
+    document.querySelectorAll(".sample-chip").forEach(c => c.classList.remove("active"));
+    chip.classList.add("active");
+    const sample = chip.dataset.sample;
+    if (sample === "live") {
+      startLiveCamera();
+    } else if (SCENARIOS[sample]) {
+      renderScenario(SCENARIOS[sample]);
+    }
+  });
+});
+
+// Zoom buttons
+document.querySelectorAll(".zoom-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    applyZoom(parseFloat(btn.dataset.zoom));
+  });
+});
+
+// Camera Modes
+document.querySelectorAll(".mode-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".mode-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentMode = btn.dataset.mode;
+    showToast(`โหมด ${btn.textContent.trim()}`);
+  });
+});
+
+// File upload
+fileInput.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      imageFeed.src = evt.target.result;
+      imageFeed.style.display = "block";
+      videoFeed.style.display = "none";
+      showToast("โหลดภาพสำเร็จ กำลังวิเคราะห์...");
+      setTimeout(() => {
+        openAdviceSheet();
+      }, 500);
+    };
+    reader.readAsDataURL(file);
+  }
+});
+
+// Shutter Button
+document.getElementById("shutterBtn").addEventListener("click", () => {
+  showToast("✨ วิเคราะห์มุมถ่ายภาพเรียบร้อย");
+  setTimeout(openAdviceSheet, 300);
+});
+
+// Sheet triggers
+function openAdviceSheet() {
+  adviceSheet.classList.add("open");
+  sheetOverlay.classList.add("open");
+}
+function closeAdviceSheet() {
+  adviceSheet.classList.remove("open");
+  sheetOverlay.classList.remove("open");
+}
+
+directorPill.addEventListener("click", openAdviceSheet);
+document.getElementById("btnOpenSheet").addEventListener("click", openAdviceSheet);
+sheetOverlay.addEventListener("click", closeAdviceSheet);
+
+// Sheet Tabs
+document.querySelectorAll(".sheet-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".sheet-tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+
+    tab.classList.add("active");
+    const target = tab.dataset.tab;
+    if (target === "target") document.getElementById("tabTarget").classList.add("active");
+    if (target === "zoom") document.getElementById("tabZoom").classList.add("active");
+    if (target === "settings") document.getElementById("tabSettings").classList.add("active");
+  });
+});
+
+document.getElementById("btnApplyZoom").addEventListener("click", () => {
+  applyZoom(currentScenario.zoom);
+  closeAdviceSheet();
+  showToast(`ปรับระยะซูมเป็น ${currentScenario.zoom}x แล้ว`);
+});
+
+document.getElementById("btnSaveAdvice").addEventListener("click", () => {
+  showToast("บันทึกคำแนะนำเข้าคลังเรียบร้อย");
+  closeAdviceSheet();
+});
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 2500);
+}
+
+// Initial Launch
+initOrientation();
+setTimeout(resizeCanvas, 100);
+renderScenario(SCENARIOS.portrait);
+</script>
+</body>
+</html>
